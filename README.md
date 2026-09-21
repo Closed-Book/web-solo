@@ -88,7 +88,7 @@ python3 scripts/browser.py doctor                                    # 环境自
 
 完整动作表见 [`SKILL.md`](SKILL.md)。
 
-**不绑定 agent 框架。** `browser.py` 是普通 Python CLI，输出 JSON，任何语言、任何框架、你自己在终端里都能调。`SKILL.md` 是 Claude Code 的技能格式，别的框架忽略它直接用 CLI 即可。
+**不绑定 agent 框架。** 详见下面「项目结构」——`AGENTS.md` 是跨厂商标准，28+ 工具直接认。
 
 ### 要登录的站：`--profile`
 
@@ -128,7 +128,8 @@ python3 scripts/browser.py fetch <url> --profile ~/.web-solo-profiles/me
 
 ```
 web-solo/
-├── SKILL.md                    给 AI 读的执行规范：三类分界 + 纪律
+├── AGENTS.md                   给任意 coding agent 读的操作手册（跨框架标准）
+├── SKILL.md                    Claude Code 的 skill 格式，同一套规范
 ├── scripts/
 │   ├── setup.sh                依赖自检与安装
 │   └── browser.py              执行层
@@ -138,6 +139,16 @@ web-solo/
     ├── xiaohongshu.com.md        headless 直接过
     └── weibo.com.md              登录墙，不是反爬
 ```
+
+三份文档，三个读者：
+
+| 文件 | 给谁 | 说明 |
+|---|---|---|
+| `README.md` | **人** | 你正在读的这份 |
+| `AGENTS.md` | **任意 coding agent** | [AGENTS.md](https://agents.md/) 是 Linux Foundation 旗下 Agentic AI Foundation 管的跨厂商标准，Codex · Cursor · Copilot Coding Agent · Gemini CLI · Windsurf · Zed · Aider 等 28+ 工具都读它 |
+| `SKILL.md` + `.claude-plugin/` | **Claude Code** | 它自己的 skill 格式。其他框架忽略这两个即可，**核心能力完全不依赖它们** |
+
+`scripts/browser.py` 是个普通 Python CLI，输出 JSON——任何语言、任何框架、你自己在终端里都能直接调。
 
 ---
 
