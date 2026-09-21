@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+# 持久化 profile 目录：里面是真 cookie 和会话，永远不要提交
+.web-solo-profiles/
+web-solo-profiles/
+profiles/
+*-profile/
+*.profile/
+
+# README / SKILL 示例命令的输出产物
+/a.png
+/out/
