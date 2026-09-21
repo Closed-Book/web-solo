@@ -1,6 +1,6 @@
-# OpenCLI：可选的结构化取数层
+# OpenCLI：结构化取数层
 
-web-solo 的**可选加速层**。不装照常用——`scripts/browser.py` 不依赖它；装了之后，第一类网页（静态页、文档站）里有适配器的那部分直接吐字段，不起浏览器、不占 tab 配额。
+web-solo 的加速层，**随 `scripts/setup.sh` 一起装**。装上之后，第一类网页（静态页、文档站）里有适配器的那部分直接吐字段，不起浏览器、不占 tab 配额；装不上也照常用——`scripts/browser.py` 不依赖它。
 
 本文所有数据实测于 `@jackwener/opencli` **v1.7.22**，2026-09-22。
 
@@ -48,7 +48,7 @@ OpenCLI 另有一类需要浏览器扩展、会起本地 daemon（端口 19825�
 
 ## 装法
 
-它是一个 npm 包，所以**这一层需要 Node.js**（web-solo 核心不需要）。
+它是一个 npm 包，所以**这一层需要 Node.js**（web-solo 核心不需要）。`setup.sh` 替你跑的就是下面这条：
 
 ```bash
 # 装在 web-solo 目录里，锁版本，不动全局
@@ -60,7 +60,7 @@ npm i @jackwener/opencli@1.7.22
 
 🔴 **锁版本，不要跟着升。** OpenCLI 的 1.7.x/1.8.x 发布频繁且带破坏性变更；上面那张表锁定在 1.7.22。要升就先对 `npm` 和 `arxiv` 各跑一条冒烟命令，输出结构对得上再用。
 
-`bash scripts/setup.sh` 会顺带报告它装没装，但**不会因为它没装而失败**——它是可选的。
+`bash scripts/setup.sh` 会顺带把它装上；没有 npm 或装失败就打印一行跳过提示，**不会因此失败**——`scripts/browser.py` 不依赖它。
 
 ## 怎么确认一个站点命中
 

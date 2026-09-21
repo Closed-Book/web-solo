@@ -10,26 +10,50 @@ trap 'rm -f "$LOG"' EXIT
 
 say() { printf '%s\n' "$*"; }
 
-# ---- 可选加速层：OpenCLI（装不装都不影响本脚本成败）-------------------------
-# 只报告，绝不安装。它没装时 web-solo 功能完整，见 references/opencli.md。
-report_opencli() {
-  local oc=""
-  if command -v opencli >/dev/null 2>&1; then
-    oc="$(command -v opencli)"
-  elif [ -x "$SCRIPT_DIR/../node_modules/.bin/opencli" ]; then
-    oc="$SCRIPT_DIR/../node_modules/.bin/opencli"
-  fi
-  if [ -n "$oc" ]; then
-    say "✅ 可选加速层 OpenCLI：v$("$oc" --version 2>/dev/null | head -n1) ($oc)"
+# ---- 加速层：OpenCLI（跟 web-solo 一起装，装不上也不阻断本脚本）-------------
+# 装进仓库自己的 node_modules，锁版本，不动全局 npm 环境。见 references/opencli.md。
+OPENCLI_PKG="@jackwener/opencli@1.7.22"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LOCAL_OPENCLI="$REPO_ROOT/node_modules/.bin/opencli"
+
+# 可移植超时：有 perl 用 perl alarm，没有就直接跑（宁可慢也不假死在这）。
+with_timeout() {
+  local secs="$1"; shift
+  if command -v perl >/dev/null 2>&1; then
+    perl -e 'alarm shift; exec @ARGV' "$secs" "$@"
   else
-    say "○ 可选加速层 OpenCLI 未安装 —— 不影响使用。装了之后 [public] 清单内的站点直出结构化数据，见 references/opencli.md。"
+    "$@"
   fi
+}
+
+ensure_opencli() {
+  if [ -x "$LOCAL_OPENCLI" ]; then
+    say "✅ 加速层 OpenCLI 已就位：$LOCAL_OPENCLI"
+    return 0
+  fi
+  if command -v opencli >/dev/null 2>&1; then
+    say "✅ 加速层 OpenCLI 已就位：$(command -v opencli)（全局）"
+    return 0
+  fi
+  if ! command -v npm >/dev/null 2>&1; then
+    say "○ 加速层 OpenCLI 跳过：这台机器没有 npm。browser.py 不依赖它，功能完整。"
+    say "   想要它：装 Node.js 后重跑本脚本。"
+    return 0
+  fi
+  say "→ 安装加速层 OpenCLI（${OPENCLI_PKG}，装进本目录 node_modules，不动全局）……"
+  if with_timeout 180 npm i --prefix "$REPO_ROOT" "$OPENCLI_PKG" >"$LOG" 2>&1 && [ -x "$LOCAL_OPENCLI" ]; then
+    say "✅ 加速层 OpenCLI 安装完成：$LOCAL_OPENCLI"
+  else
+    say "○ 加速层 OpenCLI 没装上（网络或 npm 权限），**不影响使用**——browser.py 不依赖它。"
+    say "   想重试：npm i --prefix \"$REPO_ROOT\" $OPENCLI_PKG"
+  fi
+  return 0
 }
 
 # ---- 快路径：全齐就走人 -----------------------------------------------------
 if command -v "$PY" >/dev/null 2>&1 && "$PY" "$SCRIPT_DIR/browser.py" doctor >/dev/null 2>&1; then
   say "web-solo: 依赖齐备（python3 + playwright + chromium），无需安装。"
-  report_opencli
+  ensure_opencli
   exit 0
 fi
 
@@ -113,7 +137,7 @@ fi
 # ---- 4. 复核 ---------------------------------------------------------------
 if "$PY" "$SCRIPT_DIR/browser.py" doctor; then
   say "web-solo: 依赖就绪。"
-  report_opencli
+  ensure_opencli
   exit 0
 fi
 say "❌ 自检未通过，见上面的 doctor 输出。"

@@ -8,8 +8,10 @@ profiles/
 *-profile/
 *.profile/
 
-# 可选加速层 OpenCLI 装在本目录时的产物
+# 加速层 OpenCLI 装在本目录时的产物（setup.sh 用 npm i --prefix 装，三样都是它生成的）
 node_modules/
+/package.json
+/package-lock.json
 
 # README / SKILL 示例命令的输出产物
 /a.png

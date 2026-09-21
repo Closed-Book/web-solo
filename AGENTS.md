@@ -13,7 +13,7 @@
 bash scripts/setup.sh
 ```
 
-幂等：检测 Python / Playwright / Chromium，缺什么装什么，齐了秒退（0.2–0.6 秒），并顺带报告可选的 OpenCLI 层装没装（没装不影响成败）。空环境首装约 45 秒（下载 Chromium 约 95 MB）。**任何浏览器操作前先跑它**，不要假设环境已就绪。
+幂等：检测 Python / Playwright / Chromium，缺什么装什么，齐了秒退（0.2–0.6 秒），并顺带装上 OpenCLI 加速层（没有 npm 就跳过，不影响成败）。空环境首装约 45 秒（下载 Chromium 约 95 MB）。**任何浏览器操作前先跑它**，不要假设环境已就绪。
 
 ---
 
@@ -30,9 +30,9 @@ bash scripts/setup.sh
 
 第一类占日常任务的大半。**能不起浏览器就别起。**
 
-### 第一类里的可选加速层：OpenCLI
+### 第一类里的加速层：OpenCLI
 
-装了才有，`command -v opencli` 查不到就跳过本节，直接按上表走。它是**可选**的，web-solo 不依赖它。
+`setup.sh` 会把它装上（装进仓库自己的 `node_modules`，锁 1.7.22，不动全局）。运行时仍要先确认在不在——`command -v opencli` 或看 `node_modules/.bin/opencli`，**查不到就跳过本节，直接按上表走**：没有 npm 的机器上它装不上，`browser.py` 不依赖它。
 
 判断顺序：
 
