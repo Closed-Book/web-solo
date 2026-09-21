@@ -18,35 +18,52 @@
 
 ## 它解决什么
 
-### 网页分三类，别用一把锤子砸到底
+### 网页分三类，对症下药省时间
 
 | 这类网站 | 比如 | 怎么办 | 代价 |
 |---|---|---|---|
-| **静态页、文档站** | Wikipedia · GitHub · 官方 docs | **别用 web-solo** —— AI 框架自带的抓取就够快 | 零 |
+| **静态页、文档站** | Wikipedia · GitHub · 官方 docs | **用 AI 框架默认 skill 抓取**；站点在 [OpenCLI 清单](references/opencli.md)里的更好，直出结构化字段 | 零 |
 | **反爬站** | 小红书 · B 站 · 知乎 | web-solo 起一个独立浏览器，headless 直接过 | 一个进程 |
-| **要登录的站** | X · 微博 | 在 web-solo 的窗口里登一次，之后 AI 一直用这个身份 | 你的一次登录 |
+| **要登录的站** | X · 微博 | `login` 登一次，之后一直复用 | 你的一次登录 |
 
 第一类占了日常任务的大半，**能不起浏览器就别起**——快一个量级，也不占内存。web-solo 只负责后两类。
 
 三类的分界写在 [`SKILL.md`](SKILL.md) 里，AI 按它自己决策，不需要你每次指定。
 
-### 为什么不走调试端口
+### 可选：装一个 OpenCLI，第一类网页更快
 
-常见做法是让你打开浏览器的调试端口，隔着端口指挥它。
+第一类里有一部分站点（npm · arxiv · PyPI · Wikipedia · Stack Overflow · Hacker News 等 **79 个**）有现成的结构化适配器。装上 [OpenCLI](https://www.npmjs.com/package/@jackwener/opencli) 之后，这些站直接吐字段，不必抓回整页再让 AI 从正文里找：
 
-**那个端口没有锁。** 任何能连上它的程序——包括你随手打开的一个网页——都能读走你所有的 cookie、开任意页面、截你的屏。
+```bash
+opencli npm search react -f yaml
+```
 
-web-solo 换了条路：**用管道，不用端口。**
+```yaml
+- rank: 1
+  name: react
+  version: 19.3.0
+  weeklyDownloads: 133327282
+  license: MIT
+```
 
-|  | 调试端口方案 | web-solo |
+**不装照常用。** web-solo 的核心是 `scripts/browser.py`，它不依赖这一层。装了只是让第一类网页更快、更省 token，顺带拿得下 `curl` 直接吃 403 的站（npm 就是）。
+
+**它不破坏零端口。** OpenCLI 另有一类要浏览器扩展、会起本地 daemon 的命令——web-solo 只用其中 HTTP 直连的 `[public]` 类。实测 v1.7.22 跑 npm / arxiv / pypi / wikipedia 四条命令，执行前、执行中每 0.4 秒轮询、执行后，19825 端口监听数**全程为 0**，跑完无残留进程。新增开放端口仍然是 0 个。
+
+命中条件、站点清单、装法和安全边界见 [`references/opencli.md`](references/opencli.md)。
+
+### 它跟浏览器怎么说话
+
+驱动浏览器有两种接法：开一个本地调试端口隔着网络指挥，或者用父子进程之间的管道。web-solo 走管道。
+
+|  | 调试端口 | 管道（web-solo） |
 |---|---|---|
-| 怎么连浏览器 | 开本地端口，隔着网络指挥 | 父子进程间的管道，**不走网络** |
-| 新增开放端口 | 1~2 个，无鉴权 | **0 个**（实测：进程 fd 表里只有 PIPE，无 TCP socket） |
-| 用谁的浏览器 | 你正在用的那个 | 自己下的一份，**不碰你的** |
-| 你的登录态 | 全部暴露给这个端口 | 默认不带，要带用 `--profile` |
-| 跑完之后 | 代理常驻，端口一直开着 | 进程退出，什么都不留 |
+| 新增开放端口 | 1~2 个 | **0 个**（实测：进程 fd 表里只有 PIPE，无 TCP socket） |
+| 用谁的浏览器 | 你正在用的那个 | 自己下的一份 |
+| 登录态 | 挂在那个端口后面 | 默认不带，要带用 `login` |
+| 跑完之后 | 代理常驻，端口留着 | 进程退出，什么都不留 |
 
-管道没有编号、系统里查不到、父进程一退就断。装在多少台机器上，新增的开放端口都是零。
+管道没有编号、系统里查不到、父进程一退就断。好处很直接：**装在多少台机器上，要新开的端口都是零，也不用改你现有浏览器的任何设置。**
 
 ---
 
@@ -68,6 +85,7 @@ python3 scripts/browser.py shot   https://example.com --out a.png    # 截图
 python3 scripts/browser.py eval   https://example.com --js 'document.title'
 python3 scripts/browser.py run    steps.json                         # 多步交互
 python3 scripts/browser.py tabs                                      # 看配额
+python3 scripts/browser.py login  <url> --profile DIR                # 登录一次，存登录态
 python3 scripts/browser.py doctor                                    # 环境自检
 ```
 
@@ -88,19 +106,21 @@ python3 scripts/browser.py doctor                                    # 环境自
 
 完整动作表见 [`SKILL.md`](SKILL.md)。
 
-**不绑定 agent 框架。** 详见下面「项目结构」——`AGENTS.md` 是跨厂商标准，28+ 工具直接认。
+**不绑定 agent 框架。** `scripts/browser.py` 是个普通 Python CLI，输出 JSON——任何语言、任何框架、你自己在终端里都能直接调。仓库里的 [`AGENTS.md`](AGENTS.md) 是 Linux Foundation 旗下 Agentic AI Foundation 管的跨厂商标准，Codex · Cursor · Copilot Coding Agent · Gemini CLI 等 28+ 工具直接读它。
 
 ### 要登录的站：`--profile`
 
 默认每次用一次性临时 profile，不留痕也不带身份。需要登录后的内容，就指定一个持久目录——第一次有头打开、自己登一次，之后 headless 一直复用：
 
 ```bash
-# 第一次：自己在窗口里登录
-python3 scripts/browser.py run login.json --headed --profile ~/.web-solo-profiles/me --timeout 300000
+# 第一次：窗口会打开，你正常登录，登完关掉窗口就行
+python3 scripts/browser.py login https://x.com --profile ~/.web-solo-profiles/me
 
-# 之后：登录态自动复用
+# 之后：登录态自动复用，headless 跑
 python3 scripts/browser.py fetch <url> --profile ~/.web-solo-profiles/me
 ```
+
+`login` 是**唯一一个窗口开在可见区**的命令——因为要你自己操作。其余所有有头场景都在屏幕外。
 
 **登录墙和反爬是两回事。** X、微博这类站返回空白不是被反爬拦住，是站点不给游客看内容——正解是带上自己的登录态，不是去伪装成真人浏览器。
 
@@ -133,22 +153,14 @@ web-solo/
 ├── scripts/
 │   ├── setup.sh                依赖自检与安装
 │   └── browser.py              执行层
-└── references/site-patterns/   站点经验：选择器、拦截行为、等待时长
-    ├── dpreview.com.md           Cloudflare 站怎么过
-    ├── zhihu.com.md              同站不同页防护不同
-    ├── xiaohongshu.com.md        headless 直接过
-    └── weibo.com.md              登录墙，不是反爬
+└── references/
+    ├── opencli.md              可选加速层：OpenCLI [public] 清单与用法
+    └── site-patterns/          站点经验：选择器、拦截行为、等待时长
+        ├── dpreview.com.md       Cloudflare 站怎么过
+        ├── zhihu.com.md          同站不同页防护不同
+        ├── xiaohongshu.com.md    headless 直接过
+        └── weibo.com.md          登录墙，不是反爬
 ```
-
-三份文档，三个读者：
-
-| 文件 | 给谁 | 说明 |
-|---|---|---|
-| `README.md` | **人** | 你正在读的这份 |
-| `AGENTS.md` | **任意 coding agent** | [AGENTS.md](https://agents.md/) 是 Linux Foundation 旗下 Agentic AI Foundation 管的跨厂商标准，Codex · Cursor · Copilot Coding Agent · Gemini CLI · Windsurf · Zed · Aider 等 28+ 工具都读它 |
-| `SKILL.md` + `.claude-plugin/` | **Claude Code** | 它自己的 skill 格式。其他框架忽略这两个即可，**核心能力完全不依赖它们** |
-
-`scripts/browser.py` 是个普通 Python CLI，输出 JSON——任何语言、任何框架、你自己在终端里都能直接调。
 
 ---
 
@@ -183,7 +195,18 @@ export WEB_SOLO_MAX_TABS=12    # 改上限；20 个满载约 2.9 GB
 | Python 3.9+ | 系统自带，或 `brew install python` |
 | Playwright + Chromium | `setup.sh` 自动装（下载约 95 MB，解压后占约 430 MB，只下一次） |
 
-没有别的了。不需要 Node.js、不需要浏览器插件、不需要改你现有浏览器的任何设置。
+核心依赖就这两项，**不需要浏览器插件、不需要改你现有浏览器的任何设置**。
+
+唯一需要 Node.js 的是可选的 OpenCLI 加速层——不装它 web-solo 功能完整，见 [`references/opencli.md`](references/opencli.md)。
+
+---
+
+## 鸣谢
+
+- [web-access](https://github.com/eze-is/web-access)（一泽 Eze，MIT）
+- [Playwright](https://playwright.dev/)（Microsoft，Apache-2.0）
+- [AGENTS.md](https://agents.md/)（Agentic AI Foundation）
+- [OpenCLI](https://www.npmjs.com/package/@jackwener/opencli)（@jackwener，Apache-2.0，可选加速层）
 
 ---
 

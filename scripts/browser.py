@@ -167,8 +167,12 @@ class Session:
         profile: str | None = None,
         viewport: tuple[int, int] = (1280, 1600),
         timeout_ms: int = 30000,
+        visible: bool = False,
     ) -> None:
         self.headed = headed
+        # 只有 login 命令会把 visible 打开：使用者要在窗口里自己操作。
+        # 其余一切有头场景都开在屏幕外，不抢使用者焦点。
+        self.visible = visible
         self.viewport = viewport
         self.timeout_ms = timeout_ms
         self.profile = profile
@@ -201,10 +205,9 @@ class Session:
                 "--disable-background-networking",
             ]
             if self.headed:
-                args += [
-                    f"--window-position={OFFSCREEN[0]},{OFFSCREEN[1]}",
-                    f"--window-size={w},{h}",
-                ]
+                args.append(f"--window-size={w},{h}")
+                if not self.visible:
+                    args.append(f"--window-position={OFFSCREEN[0]},{OFFSCREEN[1]}")
 
             self._pw = sync_playwright().start()
             self.ctx = self._pw.chromium.launch_persistent_context(
@@ -564,6 +567,66 @@ def cmd_run(args) -> int:
     return emit({"completed": len(steps), "results": results})
 
 
+def cmd_login(args) -> int:
+    """有头打开一个页面，等使用者自己登录完，把登录态留在 --profile 里。
+
+    这是唯一一个窗口必须可见的命令——使用者要在里面操作。其余有头场景
+    一律开在屏幕外（见 Session.visible）。
+    """
+    w, h = (int(v) for v in args.viewport.split("x"))
+    profile_dir = os.path.expanduser(args.profile)
+    detected = None
+    before = after = 0
+
+    with Session(headed=True, visible=True, profile=args.profile,
+                 viewport=(w, h), timeout_ms=args.timeout) as sess:
+        sess.page.goto(args.url, wait_until="domcontentloaded")
+        before = len(sess.ctx.cookies())
+        print(
+            f"窗口已打开，请在里面完成登录。最多等 {args.wait // 1000} 秒；"
+            f"登录完可以直接关掉窗口。",
+            file=sys.stderr,
+        )
+
+        deadline = time.time() + args.wait / 1000.0
+        while time.time() < deadline:
+            try:
+                if not sess.ctx.pages:          # 使用者自己关了窗口 = 登录完了
+                    detected = "window-closed"
+                    break
+                if args.wait_selector and sess.page.locator(
+                        args.wait_selector).first.is_visible(timeout=500):
+                    detected = "wait-selector"
+                    break
+                if args.wait_url and args.wait_url in sess.page.url:
+                    detected = "wait-url"
+                    break
+            except Exception:
+                pass                            # 页面跳转途中取 URL/元素会抛，忽略继续等
+            time.sleep(1)
+
+        try:
+            after = len(sess.ctx.cookies())
+        except Exception:
+            after = before
+
+    # Cookies 文件在 context 关闭时才刷盘，所以放到 with 外面查
+    store = None
+    for cand in ("Default/Cookies", "Cookies"):
+        f = os.path.join(profile_dir, cand)
+        if os.path.exists(f):
+            store = f
+            break
+
+    return emit({
+        "profile": os.path.abspath(profile_dir),
+        "detected_by": detected or "timeout",
+        "cookies": {"before": before, "after": after},
+        "cookie_store": store,
+        "next": f"之后带 --profile {args.profile} 跑 headless 就能复用这份登录态",
+    }, 0 if store else 1)
+
+
 def cmd_tabs(args) -> int:
     return emit(registry_snapshot())
 
@@ -638,6 +701,17 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--timeout", type=int, default=30000)
     sp.add_argument("--keep-going", action="store_true", help="某步失败也继续往下跑")
     sp.set_defaults(func=cmd_run)
+
+    sp = sub.add_parser("login", help="有头打开页面，等你自己登录，把登录态存进 --profile")
+    sp.add_argument("url")
+    sp.add_argument("--profile", required=True, help="登录态保存目录（必填）")
+    sp.add_argument("--viewport", default="1280x1600")
+    sp.add_argument("--timeout", type=int, default=30000)
+    sp.add_argument("--wait", type=int, default=300000,
+                    help="最多等多久（毫秒），默认 5 分钟；登录完直接关窗口也会立刻结束")
+    sp.add_argument("--wait-selector", help="登录成功的标志元素，出现即提前结束")
+    sp.add_argument("--wait-url", help="登录后 URL 里会出现的字符串，匹配即提前结束")
+    sp.set_defaults(func=cmd_login)
 
     sp = sub.add_parser("tabs", help="看全局 tab 配额占用")
     sp.set_defaults(func=cmd_tabs)

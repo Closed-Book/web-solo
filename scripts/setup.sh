@@ -10,9 +10,26 @@ trap 'rm -f "$LOG"' EXIT
 
 say() { printf '%s\n' "$*"; }
 
+# ---- 可选加速层：OpenCLI（装不装都不影响本脚本成败）-------------------------
+# 只报告，绝不安装。它没装时 web-solo 功能完整，见 references/opencli.md。
+report_opencli() {
+  local oc=""
+  if command -v opencli >/dev/null 2>&1; then
+    oc="$(command -v opencli)"
+  elif [ -x "$SCRIPT_DIR/../node_modules/.bin/opencli" ]; then
+    oc="$SCRIPT_DIR/../node_modules/.bin/opencli"
+  fi
+  if [ -n "$oc" ]; then
+    say "✅ 可选加速层 OpenCLI：v$("$oc" --version 2>/dev/null | head -n1) ($oc)"
+  else
+    say "○ 可选加速层 OpenCLI 未安装 —— 不影响使用。装了之后 [public] 清单内的站点直出结构化数据，见 references/opencli.md。"
+  fi
+}
+
 # ---- 快路径：全齐就走人 -----------------------------------------------------
 if command -v "$PY" >/dev/null 2>&1 && "$PY" "$SCRIPT_DIR/browser.py" doctor >/dev/null 2>&1; then
   say "web-solo: 依赖齐备（python3 + playwright + chromium），无需安装。"
+  report_opencli
   exit 0
 fi
 
@@ -96,6 +113,7 @@ fi
 # ---- 4. 复核 ---------------------------------------------------------------
 if "$PY" "$SCRIPT_DIR/browser.py" doctor; then
   say "web-solo: 依赖就绪。"
+  report_opencli
   exit 0
 fi
 say "❌ 自检未通过，见上面的 doctor 输出。"

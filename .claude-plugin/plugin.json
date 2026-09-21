@@ -1,8 +1,0 @@
-{
-  "name": "web-solo",
-  "version": "0.1.0",
-  "description": "零端口网页访问能力包。自起独立浏览器实例抓取反爬站、SPA 和需要交互的页面；不要求开浏览器调试端口，不碰使用者正在用的浏览器，用完即退。",
-  "license": "MIT",
-  "homepage": "https://github.com/Closed-Book/web-solo",
-  "keywords": ["web", "scraping", "playwright", "browser", "headless", "automation"]
-}

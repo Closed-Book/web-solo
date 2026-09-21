@@ -8,6 +8,9 @@ profiles/
 *-profile/
 *.profile/
 
+# 可选加速层 OpenCLI 装在本目录时的产物
+node_modules/
+
 # README / SKILL 示例命令的输出产物
 /a.png
 /out/
